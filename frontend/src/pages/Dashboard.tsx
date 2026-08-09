@@ -6,14 +6,14 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { getProjects, createProject, deleteProject } from "../api/projects";
 import { getSessions, createSession, deleteSession } from "../api/sessions";
-import { getStats } from "../api/stats";
+import { getStats, getWeeklySummary, getSuggestedTitles } from "../api/stats";
 import {
   LayoutDashboard, FolderKanban, Clock, Timer,
   LogOut, Sun, Moon, Plus, X, Trash2,
   TrendingUp, Flame, Target, Download,
 } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area,
 } from "recharts";
 
@@ -225,6 +225,24 @@ export default function Dashboard() {
 
   const [goalHours, setGoalHours] = useState(() => parseInt(localStorage.getItem("goalHours") || "4"));
 
+  const [aiSummary, setAiSummary] = useState<string>("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+
+  const fetchAiSummary = async () => {
+    setAiLoading(true);
+    try {
+      const [summary, titles] = await Promise.all([
+        getWeeklySummary(),
+        getSuggestedTitles(),
+      ]);
+      setAiSummary(summary.data.summary);
+      setSuggestions(titles.data.suggestions);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   // Pomodoro
   const [pomMinutes, setPomMinutes] = useState(25);
   const [pomSeconds, setPomSeconds] = useState(0);
@@ -341,11 +359,11 @@ export default function Dashboard() {
     return matchSearch && matchMood && matchProject;
   });
 
-  const totalTime = pomMode === "work" ? pomMinutes * 60 : 5 * 60;
-  const elapsed = (pomMode === "work" ? 25 * 60 : 5 * 60) - (pomMinutes * 60 + pomSeconds);
-  const pomProgress = totalTime > 0 ? elapsed / totalTime : 0;
   const radius = 80;
   const circumference = 2 * Math.PI * radius;
+  const elapsed = (pomMode === "work" ? 25 * 60 : 5 * 60) - (pomMinutes * 60 + pomSeconds);
+  const totalTime = pomMode === "work" ? 25 * 60 : 5 * 60;
+  const pomProgress = totalTime > 0 ? elapsed / totalTime : 0;
   const strokeDashoffset = circumference * (1 - pomProgress);
 
   const chartTheme = {
@@ -418,8 +436,7 @@ export default function Dashboard() {
               display: "flex", alignItems: "center", gap: 8,
               width: "100%", padding: "9px 12px", borderRadius: 10,
               background: "none", border: "none", cursor: "pointer",
-              color: "var(--text-2)", fontSize: 13,
-              transition: "all 0.2s",
+              color: "var(--text-2)", fontSize: 13, transition: "all 0.2s",
             }}
             onMouseEnter={(e: any) => { e.currentTarget.style.background = "#ef444418"; e.currentTarget.style.color = "#ef4444"; }}
             onMouseLeave={(e: any) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-2)"; }}
@@ -523,7 +540,7 @@ export default function Dashboard() {
             </div>
 
             {/* Recent sessions */}
-            <div className="card animate-fade-in-up stagger-5" style={{ padding: "20px 24px", background: "var(--card)" }}>
+            <div className="card animate-fade-in-up stagger-5" style={{ padding: "20px 24px", background: "var(--card)", marginBottom: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                 <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>Recent Sessions</h3>
                 <button onClick={() => setView("sessions")} style={{ fontSize: 12, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>View all</button>
@@ -547,6 +564,62 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
+
+            {/* AI Summary Card */}
+            <div className="card animate-fade-in-up stagger-6" style={{ padding: "20px 24px", background: "var(--card)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 28, height: 28, background: "#8b5cf622", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>✨</div>
+                  <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>AI Weekly Summary</h3>
+                </div>
+                <button
+                  onClick={fetchAiSummary}
+                  disabled={aiLoading}
+                  style={{
+                    padding: "7px 16px",
+                    background: aiLoading ? "var(--surface-2)" : "#8b5cf6",
+                    color: aiLoading ? "var(--text-3)" : "#fff",
+                    border: "none", borderRadius: 8, fontSize: 13,
+                    fontWeight: 500, cursor: aiLoading ? "not-allowed" : "pointer",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  {aiLoading ? "Generating..." : "Generate"}
+                </button>
+              </div>
+              {aiSummary ? (
+                <p className="animate-fade-in" style={{ fontSize: 14, color: "var(--text-2)", lineHeight: 1.7, padding: "12px 16px", background: "var(--surface-2)", borderRadius: 10 }}>
+                  {aiSummary}
+                </p>
+              ) : (
+                <p style={{ fontSize: 13, color: "var(--text-3)" }}>
+                  Click Generate to get a personalized AI summary of your week.
+                </p>
+              )}
+              {suggestions.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <p style={{ fontSize: 12, fontWeight: 500, color: "var(--text-3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>Suggested session titles</p>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {suggestions.map((s, i) => (
+                      <span
+                        key={i}
+                        onClick={() => { setView("sessions"); setShowSessionModal(true); setSessionTitle(s); }}
+                        style={{
+                          fontSize: 12, padding: "5px 12px", borderRadius: 20,
+                          background: "var(--surface-2)", color: "var(--text-2)",
+                          cursor: "pointer", border: "1px solid var(--border)",
+                          transition: "all 0.2s",
+                        }}
+                        onMouseEnter={(e: any) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
+                        onMouseLeave={(e: any) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-2)"; }}
+                      >
+                        + {s}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -562,7 +635,6 @@ export default function Dashboard() {
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}><Plus size={15} /> New Project</div>
               </Btn>
             </div>
-
             {projects.length === 0 ? (
               <div className="card animate-fade-in" style={{ padding: 48, textAlign: "center", background: "var(--card)" }}>
                 <FolderKanban size={40} color="var(--text-3)" style={{ margin: "0 auto 12px" }} />
@@ -571,7 +643,7 @@ export default function Dashboard() {
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 {projects.map((p, i) => (
-                  <div key={p.id} className={`card animate-fade-in-up stagger-${(i % 4) + 1}`} style={{ padding: 20, background: "var(--card)", position: "relative" }}>
+                  <div key={p.id} className={`card animate-fade-in-up stagger-${(i % 4) + 1}`} style={{ padding: 20, background: "var(--card)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                       <div style={{ flex: 1 }}>
                         <h4 style={{ fontSize: 16, fontWeight: 600, color: "var(--text)", marginBottom: 6 }}>{p.name}</h4>
@@ -585,7 +657,7 @@ export default function Dashboard() {
                           </span>
                         </div>
                       </div>
-                      <button onClick={() => handleDeleteProject(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: 4, borderRadius: 6, transition: "color 0.2s" }}
+                      <button onClick={() => handleDeleteProject(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: 4, transition: "color 0.2s" }}
                         onMouseEnter={(e: any) => e.currentTarget.style.color = "#ef4444"}
                         onMouseLeave={(e: any) => e.currentTarget.style.color = "var(--text-3)"}
                       >
@@ -616,8 +688,6 @@ export default function Dashboard() {
                 </Btn>
               </div>
             </div>
-
-            {/* Filters */}
             <div className="card animate-fade-in-up stagger-1" style={{ padding: "14px 18px", marginBottom: 20, background: "var(--card)", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
               <input
                 placeholder="Search sessions..."
@@ -637,7 +707,6 @@ export default function Dashboard() {
                 {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
-
             {filteredSessions.length === 0 ? (
               <div className="card animate-fade-in" style={{ padding: 48, textAlign: "center", background: "var(--card)" }}>
                 <Clock size={40} color="var(--text-3)" style={{ margin: "0 auto 12px" }} />
@@ -676,7 +745,6 @@ export default function Dashboard() {
               <h2 style={{ fontSize: 24, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>Pomodoro Timer</h2>
               <p style={{ color: "var(--text-2)", fontSize: 14 }}>Stay focused. {pomSessions} sessions completed today.</p>
             </div>
-
             <div className="animate-fade-in-up stagger-1" style={{ position: "relative", marginBottom: 36 }}>
               <svg width="220" height="220" viewBox="0 0 220 220">
                 <circle cx="110" cy="110" r={radius} fill="none" stroke="var(--surface-2)" strokeWidth="8" />
@@ -689,7 +757,6 @@ export default function Dashboard() {
                   strokeDasharray={circumference}
                   strokeDashoffset={strokeDashoffset}
                   transform="rotate(-90 110 110)"
-                  className={pomMode === "work" ? "pom-ring" : "pom-ring-break"}
                   style={{ transition: "stroke-dashoffset 1s linear, stroke 0.5s ease" }}
                 />
               </svg>
@@ -702,13 +769,8 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
-
             <div className="animate-fade-in-up stagger-2" style={{ display: "flex", gap: 12, marginBottom: 28 }}>
-              <Btn
-                onClick={() => setPomRunning(!pomRunning)}
-                variant={pomRunning ? "ghost" : "primary"}
-                style={{ minWidth: 120, fontSize: 15, padding: "12px 24px" }}
-              >
+              <Btn onClick={() => setPomRunning(!pomRunning)} variant={pomRunning ? "ghost" : "primary"} style={{ minWidth: 120, fontSize: 15, padding: "12px 24px" }}>
                 {pomRunning ? "Pause" : pomSeconds === 0 && pomMinutes === (pomMode === "work" ? 25 : 5) ? "Start" : "Resume"}
               </Btn>
               <Btn variant="ghost" style={{ padding: "12px 20px" }} onClick={() => {
@@ -719,7 +781,6 @@ export default function Dashboard() {
                 Reset
               </Btn>
             </div>
-
             <div className="animate-fade-in-up stagger-3" style={{ display: "flex", gap: 8, marginBottom: 36 }}>
               {[{ label: "25 min", min: 25 }, { label: "45 min", min: 45 }, { label: "60 min", min: 60 }].map((opt) => (
                 <Btn key={opt.label} variant="ghost" style={{ fontSize: 13, padding: "8px 16px" }} onClick={() => {
@@ -731,7 +792,6 @@ export default function Dashboard() {
                 </Btn>
               ))}
             </div>
-
             <div className="card animate-fade-in-up stagger-4" style={{ padding: "20px 28px", background: "var(--card)", width: "100%", maxWidth: 420 }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", marginBottom: 16 }}>Today's Pomodoros</h3>
               <div style={{ display: "flex", gap: 8 }}>

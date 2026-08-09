@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.db.session import engine, Base
-from app.api.routes import auth, projects, sessions, stats
+from app.api.routes import auth, projects, sessions, stats, ai
 
 Base.metadata.create_all(bind=engine)
 
@@ -19,6 +19,7 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(projects.router, prefix="/api/v1")
 app.include_router(sessions.router, prefix="/api/v1")
 app.include_router(stats.router, prefix="/api/v1")
+app.include_router(ai.router, prefix="/api/v1")
 
 @app.get("/")
 def root():
